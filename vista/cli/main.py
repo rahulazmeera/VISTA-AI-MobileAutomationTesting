@@ -181,11 +181,21 @@ def run(
                 typer.echo(f"✗ Failed: {result.failed_steps}")
             typer.echo(f"⏱ Duration: {result.total_duration_seconds:.1f}s")
 
-            # Save report if requested
+            # Save reports if requested
             if output:
-                typer.echo(f"\nSaving report to {output}")
-                # TODO (Stage 6): Implement HTML report generation
-                typer.echo("(Report generation coming in Stage 6)")
+                typer.echo(f"\nGenerating reports...")
+
+                # HTML report
+                html_output = output if output.endswith(".html") else f"{output}.html"
+                from vista.report.html_reporter import HTMLReporter
+                HTMLReporter().report(result, html_output)
+                typer.echo(f"✓ HTML report: {html_output}")
+
+                # JUnit XML report (for CI/CD)
+                junit_output = output if output.endswith(".xml") else f"{output}.xml"
+                from vista.report.junit_reporter import JUnitReporter
+                JUnitReporter().report(result, junit_output)
+                typer.echo(f"✓ JUnit report: {junit_output}")
 
             # Exit with appropriate code
             if result.failed_steps > 0:
