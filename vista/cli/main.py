@@ -140,14 +140,93 @@ def debug(
         "-o",
         help="Path for output debug image with overlays",
     ),
+    confidence_threshold: float = typer.Option(
+        0.0,
+        "--confidence",
+        "-c",
+        help="Minimum confidence threshold (0.0-1.0)",
+    ),
+    add_grid: bool = typer.Option(
+        False,
+        "--grid",
+        help="Add coordinate grid overlay",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose logging",
+    ),
 ):
     """Debug a screenshot — show OCR and icon detection overlays."""
-    # TODO (Stage 2): Implement visual overlay
-    typer.echo(f"Debugging screenshot: {screenshot}")
-    typer.echo(f"OCR provider: {ocr_provider}")
-    if output:
-        typer.echo(f"Output: {output}")
-    typer.echo("Stage 0 scaffold — debug visualization coming in Stage 2")
+    setup_logging(verbose)
+
+    from pathlib import Path
+
+    screenshot_path = Path(screenshot)
+    if not screenshot_path.exists():
+        typer.echo(f"Error: Screenshot not found: {screenshot}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        from PIL import Image
+
+        from vista.vision.debug import draw_all_elements, add_grid as add_grid_overlay
+        from vista.vision.ocr.paddle_ocr import PaddleOCRProvider
+        from vista.vision.ocr.easy_ocr import EasyOCRProvider
+
+        typer.echo(f"Loading screenshot: {screenshot_path}")
+        image = Image.open(screenshot_path).convert("RGB")
+        typer.echo(f"✓ Loaded {image.size[0]}x{image.size[1]} image")
+
+        # Select OCR provider
+        if ocr_provider.lower() == "paddle":
+            typer.echo("Initializing PaddleOCR...")
+            ocr = PaddleOCRProvider(use_gpu=False)
+        elif ocr_provider.lower() == "easy":
+            typer.echo("Initializing EasyOCR...")
+            ocr = EasyOCRProvider(use_gpu=False)
+        else:
+            typer.echo(f"Error: Unknown OCR provider: {ocr_provider}", err=True)
+            raise typer.Exit(code=1)
+
+        typer.echo("Running OCR detection...")
+        text_elements = ocr.detect_text(image)
+        typer.echo(f"✓ Detected {len(text_elements)} text elements")
+
+        # For now, no icon detection (Stage 4)
+        icon_elements = []
+
+        # Draw overlays
+        typer.echo("Drawing overlays...")
+        result = draw_all_elements(image, text_elements, icon_elements, confidence_threshold)
+
+        if add_grid:
+            typer.echo("Adding grid overlay...")
+            result = add_grid_overlay(result, grid_size=50)
+
+        # Save output
+        if output is None:
+            output = screenshot_path.stem + "_debug.png"
+
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        result.save(output_path)
+
+        typer.echo(f"✓ Debug image saved: {output_path}")
+        typer.echo(f"\nDetected elements:")
+        for i, elem in enumerate(text_elements, 1):
+            typer.echo(f"  {i}. '{elem.text}' @ ({elem.bbox.x}, {elem.bbox.y}) "
+                      f"[{elem.bbox.width}x{elem.bbox.height}] "
+                      f"(confidence: {elem.confidence:.2f})")
+
+    except Exception as e:
+        typer.echo(f"Error: {e}", err=True)
+        if verbose:
+            import traceback
+
+            traceback.print_exc()
+        raise typer.Exit(code=1)
 
 
 @app.command()
