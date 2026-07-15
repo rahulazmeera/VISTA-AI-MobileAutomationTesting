@@ -1,0 +1,40 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+
+  - repo: https://github.com/psf/black
+    rev: 23.9.1
+    hooks:
+      - id: black
+        language_version: python3.9
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.0.286
+    hooks:
+      - id: ruff
+        args: [--fix]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.5.0
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports]
+        additional_dependencies: [types-PyYAML, types-Pillow]
+        exclude: tests/
+
+  # Custom hook: prevent usage of find_element outside driver/ios_appium.py
+  - repo: local
+    hooks:
+      - id: no-appium-find-element-outside-driver
+        name: Prevent find_element outside driver module
+        entry: python -c "import re, sys; paths = [p for p in sys.argv[1:] if not p.startswith('vista/driver/') and p.endswith('.py')]; found = [p for p in paths if re.search(r'find_element|find_element_by_', open(p).read()) if os.path.exists(p)]; print(f'Error: find_element usage found outside vista/driver/: {found}') if found else None; sys.exit(1) if found else 0"
+        language: system
+        types: [python]
+        exclude: ^(tests/|\.pre-commit)

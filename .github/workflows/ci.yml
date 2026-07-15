@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Run black
+        run: black --check vista tests
+      - name: Run ruff
+        run: ruff check vista tests
+      - name: Run mypy
+        run: mypy vista --ignore-missing-imports
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Run unit tests
+        run: pytest tests/unit -m "not simulator" -v --cov=vista --cov-report=xml
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          flags: unittests
+
+  vision-provider-tests:
+    name: Vision Provider Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Run vision provider tests
+        run: pytest tests -m "vision" -v --timeout=120
+
+  simulator-integration-tests:
+    name: iOS Simulator Integration Tests
+    runs-on: macos-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -e ".[dev]" && npm install -g appium
+      - name: Start Appium server
+        run: appium --log-level warn > appium.log 2>&1 &
+        shell: bash
+      - name: Wait for Appium
+        run: sleep 5
+      - name: Boot iOS Simulator
+        run: |
+          xcrun simctl erase all
+          xcrun simctl create test-simulator com.apple.CoreSimulator.SimDeviceType.iPhone-14 com.apple.CoreSimulator.SimRuntime.iOS-16-2
+      - name: Run simulator integration tests
+        run: pytest tests -m "simulator" -v --timeout=300
+      - name: Upload Appium logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: appium-logs
+          path: appium.log
