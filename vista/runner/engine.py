@@ -9,6 +9,7 @@ from vista.driver.base import Driver
 from vista.matcher.base import ElementMatcher
 from vista.report.models import RunResult, StepResult
 from vista.runner.actions import get_executor_for_step
+from vista.vision.icons.base import IconDetector
 from vista.vision.ocr.base import OCRProvider
 from vista.vision.screen import ScreenState
 
@@ -32,6 +33,7 @@ class Runner:
         driver: Driver,
         matcher: ElementMatcher,
         ocr_provider: OCRProvider,
+        icon_detector: Optional[IconDetector] = None,
     ):
         """
         Initialize the runner.
@@ -40,10 +42,12 @@ class Runner:
             driver: The device driver (iOS, Android, etc.).
             matcher: The element matcher for resolving targets.
             ocr_provider: The OCR provider for text detection.
+            icon_detector: Optional icon detector for non-text UI elements.
         """
         self.driver = driver
         self.matcher = matcher
         self.ocr_provider = ocr_provider
+        self.icon_detector = icon_detector
         self.results: List[StepResult] = []
 
     def run(self, steps: List[Step], script_path: str = "unknown") -> RunResult:
@@ -77,8 +81,13 @@ class Runner:
 
                 # Step 2: Perceive elements (OCR + icon detection)
                 text_elements = self.ocr_provider.detect_text(screenshot)
-                icon_elements = []  # Stage 4: icon detection
                 logger.debug(f"Perceived {len(text_elements)} text elements")
+
+                # Detect icons if icon detector is available
+                icon_elements = []
+                if self.icon_detector is not None:
+                    icon_elements = self.icon_detector.detect_icons(screenshot)
+                    logger.debug(f"Perceived {len(icon_elements)} icon elements")
 
                 # Step 3 & 4: Build ScreenState, resolve targets, execute
                 screen = ScreenState(

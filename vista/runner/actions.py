@@ -16,7 +16,7 @@ from vista.dsl.steps import (
     WaitStep,
 )
 from vista.driver.base import Driver, Point
-from vista.matcher.base import ElementMatcher
+from vista.matcher.base import ElementMatcher, ElementNotFoundError
 from vista.report.models import StepResult
 from vista.runner.executor import ActionExecutor
 from vista.runner.waits import wait_until
@@ -42,7 +42,7 @@ class TapStepExecutor(ActionExecutor):
             # Resolve target to element
             element = matcher.resolve(step.target, screen, kind="text")
 
-            # Tap at center of element
+            # Tap at center of element (convert pixel to points)
             x_pt = int(element.bbox.center_x / driver.scale_factor())
             y_pt = int(element.bbox.center_y / driver.scale_factor())
 
@@ -59,6 +59,58 @@ class TapStepExecutor(ActionExecutor):
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
             logger.error(f"Tap failed: {e}")
+            return StepResult(
+                step=step,
+                success=False,
+                duration_ms=duration_ms,
+                error_message=str(e),
+            )
+
+
+class TapIconStepExecutor(ActionExecutor):
+    """Execute a TapIconStep."""
+
+    def execute(
+        self,
+        step: TapIconStep,
+        driver: Driver,
+        screen: ScreenState,
+        matcher: ElementMatcher,
+    ) -> StepResult:
+        """Execute a tap icon action."""
+        start_time = time.time()
+
+        try:
+            # Resolve icon target to element (need icon matcher)
+            # For now, look for the icon in screen.icon_elements directly
+            icon_elem = None
+            for elem in screen.icon_elements:
+                if elem.icon_id.lower() == step.icon.lower():
+                    icon_elem = elem
+                    break
+
+            if icon_elem is None:
+                raise ElementNotFoundError(
+                    f"Icon '{step.icon}' not found on screen"
+                )
+
+            # Tap at center of icon (convert pixel to points)
+            x_pt = int(icon_elem.bbox.center_x / driver.scale_factor())
+            y_pt = int(icon_elem.bbox.center_y / driver.scale_factor())
+
+            logger.info(f"Tapping icon '{step.icon}' at ({x_pt}, {y_pt})")
+            driver.tap(x_pt, y_pt)
+
+            duration_ms = (time.time() - start_time) * 1000
+            return StepResult(
+                step=step,
+                success=True,
+                duration_ms=duration_ms,
+            )
+
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error(f"Tap icon failed: {e}")
             return StepResult(
                 step=step,
                 success=False,
@@ -333,6 +385,7 @@ class PressKeyStepExecutor(ActionExecutor):
 # Registry of step executors
 EXECUTORS: Dict[Type[Step], Type[ActionExecutor]] = {
     TapStep: TapStepExecutor,
+    TapIconStep: TapIconStepExecutor,
     TypeStep: TypeStepExecutor,
     SwipeStep: SwipeStepExecutor,
     WaitStep: WaitStepExecutor,
