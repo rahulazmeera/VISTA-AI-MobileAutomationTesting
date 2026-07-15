@@ -102,11 +102,15 @@ def run(
         "-p",
         help="Target platform (ios or android)",
     ),
-    device: str = typer.Option(
-        None,
-        "--device",
-        "-d",
-        help="Target device name or ID (optional, uses default simulator if not specified)",
+    appium_url: str = typer.Option(
+        "http://localhost:4723",
+        "--appium-url",
+        help="Appium server URL",
+    ),
+    ocr_provider: str = typer.Option(
+        "paddle",
+        "--ocr",
+        help="OCR provider (paddle or easy)",
     ),
     output: str = typer.Option(
         None,
@@ -114,16 +118,86 @@ def run(
         "-o",
         help="Path for output report (HTML by default)",
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose logging",
+    ),
 ):
     """Run a VISTA test script."""
-    # TODO (Stage 3): Implement full execution pipeline
-    typer.echo(f"Running script: {script}")
-    typer.echo(f"Platform: {platform}")
-    if device:
-        typer.echo(f"Device: {device}")
-    if output:
-        typer.echo(f"Output: {output}")
-    typer.echo("Stage 1: iOS driver ready — full execution coming in Stage 3")
+    setup_logging(verbose)
+
+    if platform.lower() != "ios":
+        typer.echo("Error: Android not yet supported (coming in Stage 8)", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        from pathlib import Path
+
+        from vista.dsl.parser import parse as parse_script
+        from vista.driver.ios_appium import IOSAppiumDriver
+        from vista.matcher.text_matcher import TextElementMatcher
+        from vista.runner.engine import Runner
+        from vista.vision.ocr.easy_ocr import EasyOCRProvider
+        from vista.vision.ocr.paddle_ocr import PaddleOCRProvider
+
+        # Parse script
+        typer.echo(f"Loading script: {script}")
+        steps = parse_script(script)
+        typer.echo(f"✓ Parsed {len(steps)} steps")
+
+        # Select OCR provider
+        if ocr_provider.lower() == "paddle":
+            typer.echo("Initializing PaddleOCR...")
+            ocr = PaddleOCRProvider(use_gpu=False)
+        elif ocr_provider.lower() == "easy":
+            typer.echo("Initializing EasyOCR...")
+            ocr = EasyOCRProvider(use_gpu=False)
+        else:
+            typer.echo(f"Error: Unknown OCR provider: {ocr_provider}", err=True)
+            raise typer.Exit(code=1)
+
+        typer.echo(f"Connecting to Appium at {appium_url}...")
+
+        with IOSAppiumDriver(remote_url=appium_url) as driver:
+            typer.echo("✓ Connected to device/simulator")
+
+            # Create matcher and runner
+            matcher = TextElementMatcher(similarity_threshold=0.85)
+            runner = Runner(driver, matcher, ocr)
+
+            typer.echo("\nExecuting test script...")
+            typer.echo("=" * 60)
+
+            # Run the script
+            result = runner.run(steps, script_path=script)
+
+            typer.echo("=" * 60)
+
+            # Print summary
+            typer.echo(f"\n✓ Passed: {result.passed_steps}")
+            if result.failed_steps > 0:
+                typer.echo(f"✗ Failed: {result.failed_steps}")
+            typer.echo(f"⏱ Duration: {result.total_duration_seconds:.1f}s")
+
+            # Save report if requested
+            if output:
+                typer.echo(f"\nSaving report to {output}")
+                # TODO (Stage 6): Implement HTML report generation
+                typer.echo("(Report generation coming in Stage 6)")
+
+            # Exit with appropriate code
+            if result.failed_steps > 0:
+                raise typer.Exit(code=1)
+
+    except Exception as e:
+        typer.echo(f"Error: {e}", err=True)
+        if verbose:
+            import traceback
+
+            traceback.print_exc()
+        raise typer.Exit(code=1)
 
 
 @app.command()

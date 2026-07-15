@@ -1,27 +1,37 @@
 """Runner engine — the main capture → perceive → resolve → act → report loop."""
 
-from typing import List
+import logging
+import time
+from typing import List, Optional
 
-from vista.dsl.steps import Step
+from vista.dsl.steps import CommentStep, Step
 from vista.driver.base import Driver
 from vista.matcher.base import ElementMatcher
-from vista.runner.executor import ActionExecutor, StepResult
+from vista.report.models import RunResult, StepResult
+from vista.runner.actions import get_executor_for_step
+from vista.vision.ocr.base import OCRProvider
 from vista.vision.screen import ScreenState
+
+logger = logging.getLogger(__name__)
 
 
 class Runner:
     """
     Orchestrates the execution of a sequence of steps.
 
-    Implements the core loop: for each step, capture the screen, perceive elements,
-    resolve targets, execute the action, and record the result.
+    Implements the core loop: for each step:
+    1. Capture a fresh screenshot
+    2. Run perception (OCR, icon detection)
+    3. Resolve targets against the current screen
+    4. Execute the action
+    5. Record the result
     """
 
     def __init__(
         self,
         driver: Driver,
         matcher: ElementMatcher,
-        executor: ActionExecutor,
+        ocr_provider: OCRProvider,
     ):
         """
         Initialize the runner.
@@ -29,33 +39,106 @@ class Runner:
         Args:
             driver: The device driver (iOS, Android, etc.).
             matcher: The element matcher for resolving targets.
-            executor: The action executor for performing steps.
+            ocr_provider: The OCR provider for text detection.
         """
         self.driver = driver
         self.matcher = matcher
-        self.executor = executor
+        self.ocr_provider = ocr_provider
         self.results: List[StepResult] = []
 
-    def run(self, steps: List[Step]) -> List[StepResult]:
+    def run(self, steps: List[Step], script_path: str = "unknown") -> RunResult:
         """
         Execute a sequence of steps.
 
-        For each step:
-        1. Capture a fresh screenshot
-        2. Run perception (OCR, icon detection)
-        3. Resolve targets against the current screen
-        4. Execute the action
-        5. Record the result
-
         Args:
             steps: The steps to execute.
+            script_path: Path to the test script (for reporting).
 
         Returns:
-            A list of StepResult objects, one per step.
+            A RunResult with all step results and summary statistics.
         """
+        logger.info(f"Running {len(steps)} steps")
         self.results = []
-        for step in steps:
-            # TODO (Stage 1+): Implement capture → perceive → resolve → act loop
-            # For now, this is a stub that will be filled in during Stage 1-3
-            pass
-        return self.results
+
+        total_duration = time.time()
+
+        for i, step in enumerate(steps, 1):
+            # Skip comment steps
+            if isinstance(step, CommentStep):
+                logger.info(f"[{i}/{len(steps)}] {step.describe()}")
+                continue
+
+            logger.info(f"[{i}/{len(steps)}] {step.describe()}")
+
+            try:
+                # Step 1: Capture screenshot
+                screenshot = self.driver.screenshot()
+                logger.debug(f"Screenshot: {screenshot.size}")
+
+                # Step 2: Perceive elements (OCR + icon detection)
+                text_elements = self.ocr_provider.detect_text(screenshot)
+                icon_elements = []  # Stage 4: icon detection
+                logger.debug(f"Perceived {len(text_elements)} text elements")
+
+                # Step 3 & 4: Build ScreenState, resolve targets, execute
+                screen = ScreenState(
+                    screenshot=screenshot,
+                    text_elements=text_elements,
+                    icon_elements=icon_elements,
+                    timestamp=time.time(),
+                )
+
+                # Get appropriate executor for this step type
+                executor = get_executor_for_step(step)
+
+                # Execute the step
+                result = executor.execute(step, self.driver, screen, self.matcher)
+
+                # Step 5: Record result
+                self.results.append(result)
+
+                if result.success:
+                    logger.info(f"✓ Step succeeded ({result.duration_ms:.0f}ms)")
+                else:
+                    logger.error(f"✗ Step failed: {result.error_message}")
+
+            except Exception as e:
+                logger.error(f"Unexpected error: {e}", exc_info=True)
+                result = StepResult(
+                    step=step,
+                    success=False,
+                    error_message=str(e),
+                    duration_ms=(time.time() - total_duration) * 1000,
+                )
+                self.results.append(result)
+
+        total_duration_seconds = time.time() - total_duration
+
+        # Build summary
+        passed = sum(1 for r in self.results if r.success)
+        failed = sum(1 for r in self.results if not r.success)
+        skipped = len(steps) - len(self.results)
+
+        run_result = RunResult(
+            script_path=script_path,
+            total_steps=len(steps),
+            passed_steps=passed,
+            failed_steps=failed,
+            skipped_steps=skipped,
+            total_duration_seconds=total_duration_seconds,
+            step_results=self.results,
+        )
+
+        logger.info(
+            f"\n{'='*60}\n"
+            f"Test Summary\n"
+            f"{'='*60}\n"
+            f"Total:   {len(steps)} steps\n"
+            f"Passed:  {passed} ✓\n"
+            f"Failed:  {failed} ✗\n"
+            f"Skipped: {skipped}\n"
+            f"Duration: {total_duration_seconds:.1f}s\n"
+            f"{'='*60}"
+        )
+
+        return run_result

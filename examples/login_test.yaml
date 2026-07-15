@@ -1,0 +1,30 @@
+# Example VISTA test script: Login flow
+#
+# This demonstrates the YAML DSL for mobile test automation.
+# Run with: vista run examples/login_test.yaml --platform ios
+
+steps:
+  # Tap the Email field
+  - tap: "Email"
+
+  # Type the email address
+  - type:
+      text: "test@example.com"
+      into: "Email"
+
+  # Tap the Password field
+  - tap: "Password"
+
+  # Type the password
+  - type:
+      text: "password123"
+      into: "Password"
+
+  # Tap the Login button
+  - tap: "Login"
+
+  # Wait for navigation to complete
+  - wait: 2
+
+  # Assert that we're on the welcome screen
+  - assert_visible: "Welcome"
