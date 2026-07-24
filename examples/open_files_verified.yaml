@@ -1,0 +1,12 @@
+# Open Files App - With Verification
+# This test opens Files and verifies it actually opened
+
+steps:
+  # Tap the Files app icon
+  - tap: "Files"
+
+  # Wait for it to open
+  - wait: 2
+
+  # Verify the Files app is open by looking for text that only appears in Files app
+  - assert_visible: "Recents"

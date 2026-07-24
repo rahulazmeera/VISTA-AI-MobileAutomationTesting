@@ -1,0 +1,21 @@
+# Open Files App and Navigate Tabs
+# Opens Files, then navigates between the Shared and Recents tabs.
+
+steps:
+  # Tap the Files app icon
+  - tap: "Files"
+
+  # Wait for app to open
+  - wait: 3
+
+  # Tap the Shared tab
+  - tap: "Shared"
+
+  # Wait for tab to load
+  - wait: 2
+
+  # Tap the Recents tab
+  - tap: "Recents"
+
+  # Wait for tab to load
+  - wait: 2

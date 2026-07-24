@@ -35,8 +35,8 @@ class PaddleOCRProvider(OCRProvider):
                 "paddleocr is required. Install with: pip install paddleocr"
             ) from e
 
-        logger.info(f"Initializing PaddleOCR (gpu={use_gpu}, lang={lang})")
-        self._ocr = PaddleOCR(use_angle_cls=True, lang=lang, use_gpu=use_gpu)
+        logger.info(f"Initializing PaddleOCR (lang={lang})")
+        self._ocr = PaddleOCR(use_angle_cls=True, lang=lang)
         logger.info("PaddleOCR initialized successfully")
 
     def detect_text(self, image: Image) -> List[TextElement]:

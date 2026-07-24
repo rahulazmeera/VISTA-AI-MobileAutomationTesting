@@ -1,0 +1,13 @@
+# Test: Open Files App
+# This test opens the Files app from the iOS home screen
+# Demonstrates VISTA's OCR-based element detection
+
+steps:
+  # Look for and tap the Files app
+  - tap: "Files"
+
+  # Wait for app to open
+  - wait: 2
+
+  # Verify we're in the Files app
+  - assert_visible: "Recents"

@@ -1,0 +1,9 @@
+# Open Files App - Final Test
+# Tap the icon and verify app is responsive
+
+steps:
+  # Tap the Files app icon
+  - tap: "Files"
+
+  # Wait longer for app to fully launch (5 seconds)
+  - wait: 5

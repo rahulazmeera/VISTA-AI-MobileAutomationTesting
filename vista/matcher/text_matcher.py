@@ -68,10 +68,21 @@ class TextElementMatcher(ElementMatcher):
         # Filter to text elements and score each one
         candidates_with_scores = []
 
+        normalized_target = self._normalize(target)
+
         for elem in screen.text_elements:
             # Normalize both strings for comparison
-            normalized_target = self._normalize(target)
             normalized_elem_text = self._normalize(elem.text)
+
+            # WRatio blends in partial-ratio scoring, which gives a short
+            # substring an artificially high score against a much longer
+            # string (e.g. a lone "r" scores ~100 against "shared" because
+            # "r" is fully contained in it). That falsely matches stray OCR
+            # fragments — like a single on-screen keyboard letter — against
+            # real UI labels. Reject candidates too short to plausibly be
+            # the same label as the target.
+            if len(normalized_elem_text) < len(normalized_target) / 2:
+                continue
 
             # Use weighted ratio for fuzzy matching
             score = fuzz.WRatio(normalized_target, normalized_elem_text) / 100.0

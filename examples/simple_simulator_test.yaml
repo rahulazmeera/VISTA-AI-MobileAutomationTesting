@@ -1,0 +1,6 @@
+# Simple VISTA Simulator Test
+# Just uses wait step to verify Appium connection works
+# No OCR required - fastest way to verify end-to-end integration
+
+steps:
+  - wait: 1

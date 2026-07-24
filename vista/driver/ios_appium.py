@@ -67,29 +67,37 @@ class IOSAppiumDriver(Driver):
 
     def _connect(self) -> None:
         """Connect to the Appium server with XCUITest capabilities."""
+        # Appium 2.x W3C capabilities format
         capabilities = {
             "platformName": "iOS",
             "automationName": "XCUITest",
-            "app": None,  # Use already-booted simulator
             "noReset": True,
         }
 
         logger.info(f"Connecting to Appium server at {self._remote_url}")
         try:
             from appium import webdriver as appium_webdriver
+            from appium.options.ios import XCUITestOptions
+
+            # Use XCUITestOptions for Appium 2.x
+            options = XCUITestOptions()
+            options.automation_name = "XCUITest"
+            options.platform_name = "iOS"
+            options.no_reset = True
 
             self._driver = appium_webdriver.Remote(
                 command_executor=self._remote_url,
-                desired_capabilities=capabilities,
+                options=options,
             )
         except ImportError as e:
             raise ImportError(
                 "appium-python-client is required. Install with: pip install appium-python-client"
             ) from e
         except Exception as e:
+            logger.error(f"Appium connection failed: {type(e).__name__}: {e}")
             raise ConnectionError(
                 f"Could not connect to Appium server at {self._remote_url}. "
-                "Make sure Appium is running: `appium`"
+                f"Error: {e}"
             ) from e
 
         logger.info("Connected to Appium server")
@@ -147,11 +155,11 @@ class IOSAppiumDriver(Driver):
         if not self._driver or not self._converter:
             raise RuntimeError("Driver not connected or initialized")
 
-        # Convert points to pixels
-        x_px = self._converter.point_to_pixel(x)
-        y_px = self._converter.point_to_pixel(y)
-
-        logger.info(f"Tap: ({x}, {y}) points = ({x_px}, {y_px}) pixels")
+        # WebDriverAgent's W3C Actions API operates in points (the same
+        # logical coordinate space as get_window_size()), NOT raw pixels.
+        # Sending pixel coordinates here would place taps far outside the
+        # screen's point bounds on any Retina (2x/3x) device.
+        logger.info(f"Tap: ({x}, {y}) points")
 
         try:
             try:
@@ -161,7 +169,7 @@ class IOSAppiumDriver(Driver):
                 from selenium.webdriver.common.action_chains import ActionChains
 
             actions = ActionChains(self._driver)
-            actions.w3c_actions.pointer_action.move_to_location(x_px, y_px)
+            actions.w3c_actions.pointer_action.move_to_location(x, y)
             actions.w3c_actions.pointer_action.pointer_down()
             actions.w3c_actions.pointer_action.pointer_up()
             actions.perform()
@@ -187,10 +195,10 @@ class IOSAppiumDriver(Driver):
         try:
             # Use mobile: type to bypass keyboard settings
             self._driver.execute_script("mobile: type", {"text": text})
-        except Exception:
-            # Fallback to standard type if mobile: type fails
-            logger.debug("mobile: type failed, using standard type")
-            self._driver.keyboard.send_keys(text)
+        except Exception as e:
+            # Fallback to sending keys to the currently-focused element
+            logger.debug(f"mobile: type failed ({e}), using active_element.send_keys")
+            self._driver.switch_to.active_element.send_keys(text)
 
     def swipe(self, start: Point, end: Point, duration_ms: int = 300) -> None:
         """
@@ -204,15 +212,9 @@ class IOSAppiumDriver(Driver):
         if not self._driver or not self._converter:
             raise RuntimeError("Driver not connected or initialized")
 
-        # Convert points to pixels
-        start_x_px = self._converter.point_to_pixel(start.x)
-        start_y_px = self._converter.point_to_pixel(start.y)
-        end_x_px = self._converter.point_to_pixel(end.x)
-        end_y_px = self._converter.point_to_pixel(end.y)
-
+        # W3C Actions operate in points, same as tap() — see note there.
         logger.info(
             f"Swipe: ({start.x}, {start.y}) → ({end.x}, {end.y}) points, "
-            f"({start_x_px}, {start_y_px}) → ({end_x_px}, {end_y_px}) pixels, "
             f"duration {duration_ms}ms"
         )
 
@@ -224,10 +226,10 @@ class IOSAppiumDriver(Driver):
                 from selenium.webdriver.common.action_chains import ActionChains
 
             actions = ActionChains(self._driver)
-            actions.w3c_actions.pointer_action.move_to_location(start_x_px, start_y_px)
+            actions.w3c_actions.pointer_action.move_to_location(start.x, start.y)
             actions.w3c_actions.pointer_action.pointer_down()
             actions.w3c_actions.pointer_action.pause(duration_ms / 1000.0)
-            actions.w3c_actions.pointer_action.move_to_location(end_x_px, end_y_px)
+            actions.w3c_actions.pointer_action.move_to_location(end.x, end.y)
             actions.w3c_actions.pointer_action.pointer_up()
             actions.perform()
         except Exception as e:

@@ -1,0 +1,14 @@
+# Open Files App - Tap Icon (Not Text)
+# The "Files" text is below the icon
+# We need to tap ABOVE the text to hit the actual app icon
+
+steps:
+  # Tap the Files app ICON (above the text label)
+  # Text is at ~(340, 166), icon is ~60 pixels above
+  - tap: "Files"
+
+  # Wait for app to open
+  - wait: 3
+
+  # Verify Files app opened by checking for "Recents"
+  - assert_visible: "Recents"

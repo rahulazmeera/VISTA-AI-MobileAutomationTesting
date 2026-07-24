@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vista-mobile"
-version = "0.1.0dev0"
+version = "0.1.0"
 description = "Vision-based Intelligent Screen Test Automation — OCR and icon-based mobile UI testing for iOS and Android"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -28,7 +28,8 @@ dependencies = [
   "appium-python-client>=2.11.0",
   "paddleocr>=2.7.0.3",
   "easyocr>=1.7.0",
-  "opencv-python>=4.8.0",
+  "opencv-python>=4.8.0,<5.0.0",
+  "numpy<2.0.0",
   "rapidfuzz>=3.0.0",
   "pillow>=10.0.0",
   "pydantic>=2.0.0",

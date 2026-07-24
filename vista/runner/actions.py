@@ -46,6 +46,20 @@ class TapStepExecutor(ActionExecutor):
             x_pt = int(element.bbox.center_x / driver.scale_factor())
             y_pt = int(element.bbox.center_y / driver.scale_factor())
 
+            # For app icons on home screen, text is below the icon
+            # Offset upward to tap the icon itself, not the text label
+            app_names = {
+                "Files", "Settings", "Mail", "Messages", "Phone", "Photos",
+                "Contacts", "Calendar", "Reminders", "Notes", "Stocks",
+                "Health", "Weather", "Maps", "Safari", "Wallet",
+            }
+            if step.target in app_names:
+                # App icon glyph sits above its text label; offset upward
+                # (in points) to land on the icon artwork itself.
+                y_offset = 40
+                y_pt = max(0, y_pt - y_offset)
+                logger.info(f"App icon detected: offsetting tap upward by {y_offset}pt to hit icon center")
+
             logger.info(f"Tapping '{step.target}' at ({x_pt}, {y_pt})")
             driver.tap(x_pt, y_pt)
 

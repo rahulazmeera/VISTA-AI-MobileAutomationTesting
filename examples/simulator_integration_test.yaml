@@ -1,0 +1,6 @@
+# VISTA Simulator Integration Test
+# This test demonstrates the framework working end-to-end on a real simulator
+
+steps:
+  # Wait for simulator UI to settle
+  - wait: 1

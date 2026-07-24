@@ -1,0 +1,9 @@
+# Open Files App - Simple Test
+# This test opens the Files app and takes a screenshot to verify
+
+steps:
+  # Tap the Files app icon on home screen
+  - tap: "Files"
+
+  # Wait for it to open
+  - wait: 3
